@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <style>
+        canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 5;
+        }
+    </style>
+    <div id="container"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r99/three.min.js"></script>
+    <script>
+class SmoothControls {
+
+constructor( object, autoEmbarkOnInit=false, scale=false, translate=true) {
+    const scope = this
+    this.object = object
+    this.embarked = false
+    this.transformSpeed = .09
+    this.dynamicDampingFactor = .1
+    //READONLY------------------------
+    this.translateX = translate
+    this.translateY = translate
+    this.translateZ = translate
+    this.translate = [translate, translate, translate]
+    this.scaleX = scale
+    this.scaleY = scale
+    this.scaleZ = scale
+    this.scale = [scale, scale, scale]
+    //--------------------------------
+    this.minPos = 1
+    this.maxPos = Infinity
+    this.minScale = 1
+    this.maxScale = 2
+
+    let _translateStart = 0,
+        _touchStart = null
+    this.update = function () {
+        const coords = ["x", "y", "z"]
+        let factor = 1.0 - _translateStart * scope.transformSpeed
+        if ( factor !== 1.0 && factor > 0.0 ) {
+            for(let i = 0; i < 3; i++)
+            {
+                if(scope.scale[i])
+                scope.object.scale[coords[i]] =
+                    scope.object.scale[coords[i]] / factor > scope.minScale
+                    && scope.object.scale[coords[i]] / factor < scope.maxScale ?
+                    scope.object.scale[coords[i]] / factor :
+                    scope.object.scale[coords[i]] / factor < scope.maxScale ? scope.minScale : scope.maxScale
+                if(scope.translate[i])
+                scope.object.position[coords[i]] =
+                scope.object.position[coords[i]] * factor > scope.minPos
+                    && scope.object.position[coords[i]] * factor < scope.maxPos ?
+                    scope.object.position[coords[i]] * factor :
+                    scope.object.position[coords[i]] * factor < scope.maxPos ? scope.minPos : scope.maxPos
+            }
+            _translateStart -= _translateStart * scope.dynamicDampingFactor
+        }
+    }
+
+    function onMouseWheel( event ) {
+        event.preventDefault()
+        _translateStart += event.deltaY * 0.00025
+    }
+
+    function onTouchMove( event )
+    {
+        event.preventDefault()
+        if(!_touchStart)
+            _touchStart = event.touches[0].clientY
+        _translateStart += (_touchStart - event.touches[0].clientY) * 0.00001
+        console.log(_touchStart - event.touches[0].clientY)
+    }
+
+    function onTouchEnd( event ) {
+        _touchStart = null
+    }
+
+    this.setScale = function(x, y, z) {
+        scope.scaleX = x
+        scope.scaleY = y
+        scope.scaleZ = z
+        scope.scale = [x, y, z]
+    }
+    this.setTranslate = function(x, y, z) {
+        scope.translateX = x
+        scope.translateY = y
+        scope.translateZ = z
+        scope.translate = [x, y, z]
+    }
+    this.dispose = function() {
+        window.removeEventListener( 'wheel', onMouseWheel )
+        window.removeEventListener( 'touchmove', onTouchMove )
+        window.removeEventListener( 'touchend', onTouchEnd )
+        this.embarked = false
+    }
+    this.embark = function() {
+        window.addEventListener( 'wheel', onMouseWheel, { passive: false } )
+        window.addEventListener( 'touchmove', onTouchMove, { passive: false })
+        window.addEventListener( 'touchend', onTouchEnd, { passive: false })
+        this.embarked = true
+    }
+
+    if(autoEmbarkOnInit)
+        this.embark()
+    this.update()
+}
+}
+
+// ДЕКЛАРАЦИЯ КОНСТАНТ
+const container = document.getElementById('container')
+
+const ASIMPTOTE = 70
+const scene = new THREE.Scene()
+const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 )
+const renderer = new THREE.WebGLRenderer({
+alpha: true,
+antialias: true
+})
+renderer.setPixelRatio(window.devicePixelRatio)
+
+const controls = new SmoothControls(camera)
+controls.setTranslate(false, false, true)
+controls.maxPos = ASIMPTOTE + 12
+
+scene.background = new THREE.Color(0xffffff)
+renderer.setSize( window.innerWidth, window.innerHeight )
+container.appendChild( renderer.domElement )
+
+const tLoader = new THREE.TextureLoader()
+
+//document.DOMContentLoaded = function() {
+const assets = [
+  'https://homunculus.jp/works/9999-2019nc/image/thum.jpg',
+  'https://homunculus.jp/works/5572320mmp/image/thum.jpg',
+  'https://homunculus.jp/works/art-and-science/image/thum.jpg'
+]
+// ИНИЦИАЛИЗАЦИЯ ОБЪЕКТОВ
+let logo = null
+tLoader.load('https://homunculus.jp/works/dentsu-crx/image/thum.jpg', texture => {
+    logo = new THREE.Mesh(
+        new THREE.PlaneGeometry(14 / 1.2, 4 / 1.2, 16, 16),
+        new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true
+        })
+    )
+    logo.position.z = ASIMPTOTE
+    scene.add(logo)
+})
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight
+    renderer.setSize( window.innerWidth, window.innerHeight )
+    assetsObjects.forEach((obj, index) => {
+        obj.geometry = new THREE.PlaneGeometry(5 * ratios[index], 5, 50, 50)
+        obj.geometry.verticesNeedUpdate = true
+    })
+    camera.updateProjectionMatrix
+})
+
+let assetsTextures = assets.map(asset => tLoader.load(asset)),
+    assetsObjects = [],
+    ratios = [1, .95, 1.48, 1.575, 1, 1]
+
+assetsTextures.forEach( (texture, index) => {
+
+    let geometry = new THREE.PlaneGeometry(
+        10 * ratios[index % 4],
+        10,
+        80, 80)
+    let obj = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true
+    }))
+    scene.add(obj)
+    assetsObjects.push(obj)
+    obj.position.set(
+        Math.sin(60 * index / Math.PI) * ASIMPTOTE / 5 * ((index % 2 === 0 ? index : -index) % 4 + 1),
+        Math.cos(60 * (index + 1) / Math.PI) * ASIMPTOTE / 4 * (index % 2 !== 0 ? 1 : -1),
+        Math.max(
+            ASIMPTOTE * (1 - index / assetsObjects.length) - (index === 0) ? 10 : 0,
+            controls.minPos
+        )
+    )
+})
+const verticesOriginal = assetsObjects.map(obj =>
+    obj.geometry.vertices
+)
+camera.position.z = controls.maxPos
+controls.embark()
+
+let time = 0
+let STATE = "initial"
+
+function animate() {
+    switch(STATE)
+    {
+        case "initial":
+            if(camera.position.z <= ASIMPTOTE)
+                STATE = "distort"
+            break
+        case "distort":
+            time += .04
+            assetsObjects.forEach(obj => {
+                obj.geometry.vertices.map(v => {
+                    // Анимация 1
+                    // const waveOne = 0.8 * Math.sin((v.y * .3) * 2   + time)
+                    // const waveTwo = 0.8 * Math.sin((v.x * .3) * 2   + time)
+                    // v.z =  waveOne + waveTwo
+
+                    // Анимация 2
+                    // const waveOne = 0.3 * Math.sin((v.x * .2) * 1   + time)
+                    // const waveTwo = -.3 * Math.sin((v.x * .2) * 3   + time)
+                    // const waveThree = -3.2 * Math.sin((v.x * .2) * 2   + time)
+                    // const waveFour = 1.9 * Math.sin((v.y * .2) * 2   + time)
+                    // v.z =  waveOne + waveTwo + waveThree + waveFour
+
+                    // Анимация 3
+                    const waveOne = -2.5 * Math.sin((v.x * .4) * 1.2 + time)
+                    const waveTwo = -2.5 * Math.sin((v.y * .3) * 2 + time)
+                    v.z = waveOne + waveTwo 
+
+                    // Анимация 4
+                    // const waveOne = 2.5 * Math.sin((v.x * .2) * 1   + time)
+                    // const waveFour = 3 * Math.sin((v.y * .2) * -2   + time)
+                    // v.z = waveOne + waveFour
+
+                    // Анимация 5
+                    // const waveOne = 0.5 * Math.sin((v.x * .4) *4    + time)
+                    // const waveTwo = 5.1 * Math.sin((v.y * .9) / 2   + time)
+                    // const waveThree = -.7 * Math.sin((v.y * .5) * 2   + time)
+                    // const waveFour = -5.1 * Math.sin((v.x * .4) /3   + time)
+                    // v.z = waveOne + waveTwo + waveThree + waveFour
+                }) 
+                obj.geometry.verticesNeedUpdate = true
+            })
+            if(camera.position.z >= ASIMPTOTE)
+            {
+                assetsObjects.forEach((obj, index) => {
+                    obj.geometry.vertices = verticesOriginal[index]
+                })
+                STATE = "initial"
+            }
+            // else if(camera.position.z <= controls.minPos + 5)
+            // {
+            //     window.location.assign(window.origin + '/curators')
+            //     return null
+            // }
+            break
+    }
+    controls.update()
+    renderer.render(scene, camera)
+    requestAnimationFrame( animate )
+}
+//requestAnimationFrame(animate)
+animate()
+//}
+    </script>
+</body>
+</html>
